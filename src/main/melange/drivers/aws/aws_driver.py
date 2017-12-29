@@ -1,4 +1,5 @@
 import json
+import uuid
 
 import boto3
 
@@ -20,26 +21,32 @@ class AWSDriver(MessagingDriver):
         queue = sqs_res.create_queue(QueueName=queue_name)
 
         if topic_to_bind:
+            topics_to_bind = [topic_to_bind] if not isinstance(topic_to_bind, list) else topic_to_bind
+            statements = []
+            for topic in topics_to_bind:
+                statement = {
+                    'Sid': 'Sid{}'.format(uuid.uuid4()),
+                    'Effect': 'Allow',
+                    'Principal': '*',
+                    'Resource': queue.attributes['QueueArn'],
+                    'Action': 'sqs:SendMessage',
+                    'Condition': {
+                        'ArnEquals': {
+                            'aws:SourceArn': topic.arn
+                        }
+                    }
+                }
+
+                statements.append(statement)
+                topic.subscribe(Protocol='sqs', Endpoint=queue.attributes['QueueArn'])
+
             policy = {
                 'Version': '2012-10-17',
                 'Id': 'sqspolicy',
-                'Statement': [
-                    {
-                        'Sid': 'First',
-                        'Effect': 'Allow',
-                        'Principal': '*',
-                        'Resource': queue.attributes['QueueArn'],
-                        'Action': 'sqs:SendMessage',
-                        'Condition': {
-                            'ArnEquals': {
-                                'aws:SourceArn': topic_to_bind.arn
-                            }
-                        }
-                    }
-                ]
+                'Statement': statements
             }
+
             queue.set_attributes(Attributes={'Policy': json.dumps(policy)})
-            topic_to_bind.subscribe(Protocol='sqs', Endpoint=queue.attributes['QueueArn'])
 
         dead_letter_queue = None
         if dead_letter_queue_name:

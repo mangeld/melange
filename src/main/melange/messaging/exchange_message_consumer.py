@@ -10,7 +10,12 @@ class ExchangeMessageConsumer:
     def __init__(self, event_queue_name, topic_to_subscribe=None, dead_letter_queue_name=None, driver=None):
         self._exchange_listeners = []
         self._driver = driver or DriverManager.instance().get_driver()
-        self._topic = self._driver.declare_topic(topic_to_subscribe) if topic_to_subscribe else None
+
+        if isinstance(topic_to_subscribe, list):
+            self._topic = [ self._driver.declare_topic(topic) for topic in topic_to_subscribe ]
+        else:
+            self._topic = self._driver.declare_topic(topic_to_subscribe) if topic_to_subscribe else None
+
         self._event_queue, self._dead_letter_queue = self._driver.declare_queue(event_queue_name,
                                                                                 self._topic,
                                                                                 dead_letter_queue_name)
